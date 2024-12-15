@@ -15,6 +15,7 @@ st.set_page_config(page_title="Tool-Enabled RAG Chatbot", page_icon="🤖", layo
 XAI_API_KEY = os.getenv("XAI_API_KEY")
 HF_API_KEY = os.getenv("HF_API_KEY")
 MODEL_NAME = "grok-2-1212"
+# Add this
 
 # Placeholder imports for your custom OpenAI client
 # Assuming `from openai import OpenAI` is a valid import for your environment
