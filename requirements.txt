@@ -1,0 +1,7 @@
+streamlit
+openai
+scikit-learn
+numpy
+requests
+watchdog
+python-dotenv
