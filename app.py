@@ -16,13 +16,13 @@ load_dotenv()
 st.set_page_config(page_title="Tool-Enabled RAG Chatbot", page_icon="🤖", layout="centered")
 
 # Define your API keys and model
-XAI_API_KEY = os.getenv("XAI_API_KEY")
-HF_API_KEY = os.getenv("HF_API_KEY")
+XAI_API_KEY = st.secrets("XAI_API_KEY")
+HF_API_KEY = st.secrets("HF_API_KEY")
 MODEL_NAME = "grok-2-1212"
 # Add this
 
-url: str = os.getenv("SUPABASE_URL")
-key: str = os.getenv("SUPABASE_KEY")
+url: str = st.secrets("SUPABASE_URL")
+key: str = st.secrets("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
 
 # Placeholder imports for your custom OpenAI client
