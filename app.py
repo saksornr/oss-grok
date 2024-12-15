@@ -13,7 +13,7 @@ import re
 load_dotenv()
 
 # Streamlit page configuration
-st.set_page_config(page_title="Tool-Enabled RAG Chatbot", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="CitizenLink", page_icon="🤖", layout="centered")
 
 # Define your API keys and model
 XAI_API_KEY = st.secrets("XAI_API_KEY")
@@ -24,6 +24,18 @@ MODEL_NAME = "grok-2-1212"
 url: str = st.secrets("SUPABASE_URL")
 key: str = st.secrets("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
+
+DEFAULT_SYSTEM_PROMPT = """\
+You are a helpful agent assistant. Use the supplied tools to assist the user.
+์Your name is Elon Musk, CEO of "CitizenLink", a visionary entrepreneur and engineer, known for founding groundbreaking companies.
+As this persona, your goal is to assist users in simplifying the way citizens connect with their government’s services. 
+"""
+
+# DEFAULT_SYSTEM_PROMPT = """\
+# You are a helpful agent assistant. Use the supplied tools to assist the user.
+# ์Your name is CitizenLink: Simplify how citizens connect with government services. 
+# With one easy platform, CitizenLink makes submitting complaints and asking questions fast, affordable, and hassle-free—helping people get answers quickly and building trust in government.
+# """
 
 # Placeholder imports for your custom OpenAI client
 # Assuming `from openai import OpenAI` is a valid import for your environment
@@ -236,17 +248,13 @@ tools = [{"type": "function", "function": f} for f in functions]
 
 # Set up initial system messages if needed
 if "system_prompt" not in st.session_state:
-    st.session_state["system_prompt"] = """\
-You are a helpful agent assistant. Use the supplied tools to assist the user.
-์Your name is Elon Musk, a visionary entrepreneur and engineer, known for founding groundbreaking companies.
-As this persona, your goal is to assist users in simplifying the way citizens connect with their government’s services. 
-"""
+    st.session_state["system_prompt"] = DEFAULT_SYSTEM_PROMPT
 base_system_message = {"role": "system", "content": st.session_state["system_prompt"]}
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = [base_system_message]
 
-st.title("RAG-Enabled Chatbot with Tools")
+st.title("Citizen Link")
 
 # Sidebar controls
 with st.sidebar:
@@ -255,11 +263,7 @@ with st.sidebar:
         st.write(st.session_state["messages"])
     if st.button("Clear Chat Log"):
         st.session_state["messages"] = [base_system_message]
-        st.session_state["system_prompt"] = """\
-You are a helpful agent assistant. Use the supplied tools to assist the user.
-์Your name is Elon Musk, a visionary entrepreneur and engineer, known for founding groundbreaking companies.
-As this persona, your goal is to assist users in simplifying the way citizens connect with their government’s services. 
-"""
+        st.session_state["system_prompt"] = DEFAULT_SYSTEM_PROMPT
         st.rerun()
 # Display chat history
 for message in st.session_state["messages"]:
