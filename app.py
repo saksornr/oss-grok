@@ -112,6 +112,18 @@ functions = [
             },
             "required": ["query"]
         },
+        "name": "save_complaint",
+        "description": "Summerize the user complaint to further contact the relevant department",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "history": {
+                    "type": "string",
+                    "description": "A chat history",
+                },
+            },
+            "required": ["history"]
+        },
     }
 ]
 
@@ -166,7 +178,13 @@ if user_input:
     # The response may contain direct content or a tool call
     assistant_msg = response.choices[0].message
 
-    if assistant_msg.tool_calls != None:
+    if assistant_msg.tool_calls == None:
+        final_content = assistant_msg.content
+        st.session_state["messages"].append({"role": "assistant", "content": final_content})
+        with st.chat_message("assistant"):
+            st.markdown(final_content)
+
+    if assistant_msg.tool_calls[0].function.name == "document_rag":
         print("Used Tool!", assistant_msg.tool_calls)
         
         # If there is a tool call
@@ -212,6 +230,23 @@ if user_input:
 
         # Add assistant response to messages
         st.session_state["messages"].append({"role": "assistant", "content": final_content})
+
+    elif assistant_msg.tool_calls[0].function.name == "summarize_complaint":
+        prompt = """Summarize this complaint chat for save it in the database"""
+        messages = st.session_state["messages"].copy()
+        messages.append({"role": "assistant", "content": prompt})
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=st.session_state["messages"],
+        )
+        with st.chat_message("assistant"):
+            st.markdown(response.choices[0].message.content)
+
+        # Add assistant response to messages
+        st.session_state["messages"].append({"role": "assistant", "content": response.choices[0].message.content})
+
+
+        
 
     else:
         # No tool call, just a direct response
