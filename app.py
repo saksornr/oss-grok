@@ -6,6 +6,9 @@ from typing import List
 from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 import os
+import supabase
+from supabase import create_client, Client
+
 load_dotenv()
 
 # Streamlit page configuration
@@ -15,6 +18,10 @@ st.set_page_config(page_title="Tool-Enabled RAG Chatbot", page_icon="🤖", layo
 XAI_API_KEY = os.getenv("XAI_API_KEY")
 HF_API_KEY = os.getenv("HF_API_KEY")
 MODEL_NAME = "grok-2-1212"
+
+url: str = os.getenv("SUPABASE_URL")
+key: str = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
 
 # Placeholder imports for your custom OpenAI client
 # Assuming `from openai import OpenAI` is a valid import for your environment
@@ -83,6 +90,49 @@ class RAG:
 
         return top_docs
 
+def summarize_complaint(history):
+    prompt = """Summarize this complaint chat for save it in the database in json format:
+    {"Complaint": "",
+    "Relevant Department": ""}"""
+    history = history.copy()
+    history.append({"role": "user", "content": prompt})
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=st.session_state["messages"],
+    )
+
+    # Save to database
+    def save_complaint(user_complaint: str, department: str):
+        # Insert complaint data into Supabase
+        response = supabase.table('complaints').insert({
+            'complaint_text': user_complaint,
+            'department': department,
+        }).execute()
+
+        if response.status_code == 200:
+            print(f"Complaint saved: {response.data}")
+        else:
+            print(f"Error saving complaint: {response.error_message}")
+    
+    save_complaint(response.choices[0].message.content["Complaint"], response.choices[0].message.content["Relevant Department"])
+
+    return response
+
+def change_agent(complaint):
+    prompt = f"""What department should I contact base on this story:
+    
+    {complaint}
+    
+    Create system prompt for that department agent and answer only the prompt for example:
+    You are a helpful agent assistant. Use the supplied tools to assist the user."""
+
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=prompt,
+    )
+    
+    st.session_state["system_prompt"] = response.choices[0].message.content
+
 # Initialize RAG and client once
 if "rag" not in st.session_state:
     st.session_state["rag"] = RAG(document_text)
@@ -112,8 +162,8 @@ functions = [
             },
             "required": ["query"]
         },
-        "name": "save_complaint",
-        "description": "Summerize the user complaint to further contact the relevant department",
+        "name": "summarize_complaint",
+        "description": "Summerize the user complaint to report to the relevant department",
         "parameters": {
             "type": "object",
             "properties": {
@@ -124,13 +174,27 @@ functions = [
             },
             "required": ["history"]
         },
+        "name": "change_agent",
+        "description": "Change the agent base on the topic provide.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "complaint": {
+                    "type": "string",
+                    "description": "A complaint",
+                },
+            },
+            "required": ["history"]
+        },
     }
 ]
 
 tools = [{"type": "function", "function": f} for f in functions]
 
 # Set up initial system messages if needed
-base_system_message = {"role": "system", "content": "You are a helpful agent assistant. Use the supplied tools to assist the user."}
+if "system_prompt" not in st.session_state:
+    st.session_state["system_prompt"] = "You are a helpful agent assistant. Use the supplied tools to assist the user."
+base_system_message = {"role": "system", "content": st.session_state["system_prompt"]}
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = [base_system_message]
@@ -179,12 +243,13 @@ if user_input:
     assistant_msg = response.choices[0].message
 
     if assistant_msg.tool_calls == None:
+        print("Tool None!")
         final_content = assistant_msg.content
         st.session_state["messages"].append({"role": "assistant", "content": final_content})
         with st.chat_message("assistant"):
             st.markdown(final_content)
 
-    if assistant_msg.tool_calls[0].function.name == "document_rag":
+    elif assistant_msg.tool_calls[0].function.name == "document_rag":
         print("Used Tool!", assistant_msg.tool_calls)
         
         # If there is a tool call
@@ -232,24 +297,34 @@ if user_input:
         st.session_state["messages"].append({"role": "assistant", "content": final_content})
 
     elif assistant_msg.tool_calls[0].function.name == "summarize_complaint":
-        prompt = """Summarize this complaint chat for save it in the database"""
-        messages = st.session_state["messages"].copy()
-        messages.append({"role": "assistant", "content": prompt})
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=st.session_state["messages"],
-        )
+        tool_call = assistant_msg.tool_calls[0]
+        response = summarize_complaint(st.session_state["messages"])
         with st.chat_message("assistant"):
             st.markdown(response.choices[0].message.content)
 
+        function_call_result_message = {
+            "role": "tool",
+            "content": f"{response.choices[0].message.content}",
+            "tool_call_id": tool_call.id
+        }
+
+        # Add the tool message to the conversation
+        st.session_state["messages"].append(function_call_result_message)
+
+        final_response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=st.session_state["messages"],
+            tools=tools,
+            stream=False
+        )
+        final_content = final_response.choices[0].message.content
+
         # Add assistant response to messages
-        st.session_state["messages"].append({"role": "assistant", "content": response.choices[0].message.content})
-
-
-        
+        st.session_state["messages"].append({"role": "assistant", "content": final_content})
 
     else:
         # No tool call, just a direct response
+        print("No tool call!")
         final_content = assistant_msg.content
         st.session_state["messages"].append({"role": "assistant", "content": final_content})
         with st.chat_message("assistant"):
